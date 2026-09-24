@@ -52,7 +52,7 @@ local function render(bufnr)
         return
     end
 
-    local lines, err = cli.decrypt(path, get_lines(bufnr))
+    local lines, err = cli.decrypt(path)
     if not lines then
         notify(("cannot decrypt %s\n%s"):format(pretty_name(bufnr), err), vim.log.levels.ERROR)
         return

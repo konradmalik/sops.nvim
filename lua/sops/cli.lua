@@ -18,17 +18,16 @@ local function to_lines(out) return vim.split(((out or ""):gsub("\n$", "")), "\n
 
 local M = {}
 
----Decrypt the contents of the file at `path`. The lines are passed in rather
----than read from disk so that an unsaved buffer decrypts too, `path` only
----tells sops which format to expect.
+---Decrypt the file at `path`.
+---
+---It is read from disk rather than piped in from the buffer on purpose:
+---neovim gives a child process a socket for its stdin, and on linux a socket
+---cannot be opened again through /dev/stdin. A buffer is only ever decrypted
+---while it is unmodified, so the file holds the very same ciphertext anyway.
 ---@param path string
----@param lines string[]
 ---@return string[]? lines, string? err
-function M.decrypt(path, lines)
-    local res = vim.system({ "sops", "decrypt", "--filename-override", path, "/dev/stdin" }, {
-        stdin = to_stdin(lines),
-        text = true,
-    }):wait(timeout)
+function M.decrypt(path)
+    local res = vim.system({ "sops", "decrypt", path }, { text = true }):wait(timeout)
     if res.code ~= 0 then return nil, vim.trim(res.stderr or "") end
     return to_lines(res.stdout), nil
 end

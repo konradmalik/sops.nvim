@@ -82,9 +82,7 @@ return {
     ---@return string[]
     get_buf_lines = function(bufnr) return vim.api.nvim_buf_get_lines(bufnr, 0, -1, true) end,
 
-    close_buffers_except_initial = function()
-        for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-            if bufnr ~= 1 then vim.api.nvim_buf_delete(bufnr, { force = true }) end
-        end
-    end,
+    ---Files are opened with `:edit`, which reuses the initial empty buffer, so
+    ---that one has to go as well or it stays attached to a deleted fixture.
+    close_all_buffers = function() vim.cmd("silent! %bwipeout!") end,
 }

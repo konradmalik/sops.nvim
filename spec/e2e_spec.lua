@@ -44,7 +44,7 @@ describe("with a real sops", function()
     end)
 
     after_each(function()
-        utils.close_buffers_except_initial()
+        utils.close_all_buffers()
         utils.clear_dir(dir)
     end)
 
@@ -76,6 +76,10 @@ describe("with a real sops", function()
 
         sops.toggle()
 
+        assert.are.same(
+            {},
+            vim.tbl_filter(function(m) return m:find("cannot") ~= nil end, notifications)
+        )
         assert.are.same(fixture, utils.get_buf_lines(bufnr))
         assert.is_true(vim.b[bufnr].sops_plaintext)
         assert.is_false(vim.bo[bufnr].modified)
