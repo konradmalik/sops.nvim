@@ -61,3 +61,17 @@ The same state is available as `require("sops").is_plaintext()`.
 ## Reference
 
 For reference usage see [my neovim config](https://github.com/konradmalik/neovim-flake).
+
+## Development
+
+Enter the devshell with `nix develop` (or direnv, see `.envrc`). It links a generated `.luarc.json` for
+lua-language-server.
+
+```bash
+$ nix fmt
+$ nix flake check
+```
+
+`nix fmt` formats everything through treefmt (`treefmt.nix`). `nix flake check` covers formatting, shellcheck,
+luacheck, and the tests (busted using nvim as an interpreter, with sops and age for the end-to-end ones). In the
+devshell, `busted --lua=nlua` runs the tests directly.
