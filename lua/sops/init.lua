@@ -194,7 +194,12 @@ function M.attach(bufnr)
         end,
     })
 
-    render(bufnr)
+    -- neovim has just read the ciphertext, no need to read it again
+    if plaintext then
+        render(bufnr)
+    else
+        remember(bufnr)
+    end
 end
 
 ---Switch every sops buffer between its encrypted and decrypted view.
