@@ -248,4 +248,30 @@ describe("with a real sops", function()
         assert.is_false(vim.bo[bufnr].modified)
         assert.are.same(fixture, utils.decrypt(encrypted))
     end)
+
+    it("refuses to write part of the plaintext elsewhere", function()
+        local part, appended =
+            vim.fs.joinpath(dir, "part.yaml"), vim.fs.joinpath(dir, "appended.yaml")
+        vim.fn.writefile({ "existing: line" }, appended)
+        utils.open(encrypted)
+        sops.toggle()
+
+        pcall(vim.cmd, "1,1write " .. part)
+        pcall(vim.cmd, "write >> " .. appended)
+
+        assert.are.equal(0, vim.fn.filereadable(part))
+        assert.are.same({ "existing: line" }, vim.fn.readfile(appended))
+        assert.is_true(notified("cannot write part"))
+    end)
+
+    it("still writes part of the ciphertext elsewhere", function()
+        local part = vim.fs.joinpath(dir, "part.yaml")
+        local bufnr = utils.open(encrypted)
+
+        vim.cmd("1,2write " .. part)
+        vim.cmd("1write >> " .. part)
+
+        local lines = utils.get_buf_lines(bufnr)
+        assert.are.same({ lines[1], lines[2], lines[1] }, vim.fn.readfile(part))
+    end)
 end)

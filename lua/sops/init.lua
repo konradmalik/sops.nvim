@@ -173,6 +173,20 @@ function M.attach(bufnr)
             write(bufnr)
         end,
     })
+    vim.api.nvim_create_autocmd({ "FileWriteCmd", "FileAppendCmd" }, {
+        group = group,
+        buffer = bufnr,
+        desc = "write part of the buffer, unless it is decrypted",
+        callback = function(args)
+            if vim.b[bufnr].sops_plaintext then
+                return notify("cannot write part of a decrypted buffer", vim.log.levels.ERROR)
+            end
+            local first = vim.api.nvim_buf_get_mark(bufnr, "[")[1]
+            local last = vim.api.nvim_buf_get_mark(bufnr, "]")[1]
+            local lines = vim.api.nvim_buf_get_lines(bufnr, first - 1, last, false)
+            vim.fn.writefile(lines, args.file, args.event == "FileAppendCmd" and "a" or "")
+        end,
+    })
 
     render(bufnr)
 end

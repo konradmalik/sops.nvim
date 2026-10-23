@@ -34,6 +34,7 @@ There are many similar plugins already. I was not fully satisfied with any of th
   recipients, so changing one value changes one line in git
 - verifies after every write that what landed on disk is encrypted
 - refuses to write over a file that changed on disk since it was read, `:w!` does it anyway
+- refuses a partial write of a decrypted buffer (`:1,2w file`, `:w >> file`)
 - `:saveas` writes an encrypted copy using `.sops.yaml` for creation rules
 
 Every buffer it takes over gets two variables, useful for a statusline:
@@ -49,8 +50,6 @@ The same state is available as `require("sops").is_plaintext()`.
 - `:SopsToggle` skips buffers with unsaved changes, save or undo them first
 - format on save does not run on these buffers, `BufWritePre` is not fired
 - `:w other-file` is refused, use `:saveas`
-- a partial write of a decrypted buffer (`:1,2w file`, `:w >> file`) is not
-  guarded, it writes plaintext like it would for any other buffer
 - sops is killed after 30s if something goes wrong and leaves its own temporary decrypted
   copy behind in `$TMPDIR`
 - a yanked secret still ends up in registers and in shada
