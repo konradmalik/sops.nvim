@@ -141,7 +141,11 @@ local M = {}
 ---@param bufnr integer
 function M.attach(bufnr)
     if vim.b[bufnr].sops then
-        -- already known, it was just reloaded from disk
+        -- FileType fires again after a reload, but also on a mere :setfiletype,
+        -- which must not throw away unsaved changes
+        if vim.bo[bufnr].modified then return end
+        -- a reload brought the ciphertext back, whatever the flag says
+        vim.b[bufnr].sops_plaintext = not detect.is_encrypted(get_lines(bufnr))
         render(bufnr)
         return
     end

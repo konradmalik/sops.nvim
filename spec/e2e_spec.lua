@@ -211,4 +211,30 @@ describe("with a real sops", function()
         assert.are.same({}, notifications_matching("cannot"))
         assert.are.same({ "foo: changed", "password: " .. secret }, utils.decrypt(encrypted))
     end)
+
+    it("keeps unsaved changes when the filetype is set again", function()
+        local bufnr = utils.open(encrypted)
+        sops.toggle()
+        vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, { "foo: unsaved" })
+
+        vim.bo[bufnr].filetype = "json"
+
+        assert.are.same({ "foo: unsaved", "password: " .. secret }, utils.get_buf_lines(bufnr))
+        assert.is_true(vim.bo[bufnr].modified)
+    end)
+
+    it("knows the buffer holds ciphertext when a reload cannot be decrypted", function()
+        local bufnr = utils.open(encrypted)
+        sops.toggle()
+        local key = vim.env.SOPS_AGE_KEY_FILE
+        vim.env.SOPS_AGE_KEY_FILE = nil
+
+        vim.cmd("edit!")
+        vim.bo[bufnr].filetype = "json"
+        vim.env.SOPS_AGE_KEY_FILE = key
+
+        assert.matches("ENC%[AES256_GCM", utils.get_buf_lines(bufnr)[1])
+        assert.is_false(vim.b[bufnr].sops_plaintext)
+        assert.is_true(notified("cannot decrypt"))
+    end)
 end)
