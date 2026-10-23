@@ -4,6 +4,9 @@
 -- empty), which makes sops give up and report the parse error instead.
 local editor = [[sh -c 'cat > "$0"; [ -s "$0" ]']]
 
+-- What `sops edit` exits with when the plaintext came back unchanged.
+local unchanged = 200
+
 -- A key can live on a hardware token or behind the network, but sops must
 -- never be able to hang neovim.
 local timeout = 30000
@@ -44,7 +47,7 @@ function M.encrypt(path, lines)
         stdin = to_stdin(lines),
         text = true,
     }):wait(timeout)
-    if res.code ~= 0 then return false, vim.trim(res.stderr or "") end
+    if res.code ~= 0 and res.code ~= unchanged then return false, vim.trim(res.stderr or "") end
     return true, nil
 end
 
