@@ -91,7 +91,6 @@ end
 ---@param bufnr integer
 local function write(bufnr)
     local path = vim.api.nvim_buf_get_name(bufnr)
-    local lines = get_lines(bufnr)
 
     -- writing goes around neovim, so its own check for this never runs
     if vim.v.cmdbang == 0 and changed_on_disk(bufnr, path) then
@@ -101,6 +100,13 @@ local function write(bufnr)
         )
         return
     end
+
+    -- formatters hook in here; only for plaintext, reformatted ciphertext
+    -- is nobody's business
+    if vim.b[bufnr].sops_plaintext then
+        vim.api.nvim_exec_autocmds("BufWritePre", { buffer = bufnr })
+    end
+    local lines = get_lines(bufnr)
 
     if vim.b[bufnr].sops_plaintext then
         local ok, err = cli.encrypt(path, lines)
