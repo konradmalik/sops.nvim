@@ -173,11 +173,18 @@ function M.attach(bufnr)
         buffer = bufnr,
         desc = "encrypt the buffer back into the file",
         callback = function(args)
-            -- a write to another name would silently encrypt into our own file
-            if full_path(args.file) ~= full_path(vim.api.nvim_buf_get_name(bufnr)) then
-                return notify("cannot write elsewhere, use :saveas", vim.log.levels.ERROR)
+            if full_path(args.file) == full_path(vim.api.nvim_buf_get_name(bufnr)) then
+                return write(bufnr)
             end
-            write(bufnr)
+            -- a copy of the ciphertext is as safe as the original, but
+            -- plaintext would have to be encrypted into our own file
+            if vim.b[bufnr].sops_plaintext then
+                return notify(
+                    "cannot write a decrypted buffer elsewhere, use :saveas",
+                    vim.log.levels.ERROR
+                )
+            end
+            vim.fn.writefile(get_lines(bufnr), args.file)
         end,
     })
     vim.api.nvim_create_autocmd({ "FileWriteCmd", "FileAppendCmd" }, {
