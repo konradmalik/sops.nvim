@@ -155,6 +155,8 @@ function M.attach(bufnr)
     vim.bo[bufnr].swapfile = false
     vim.bo[bufnr].undofile = false
 
+    -- :bdelete forgets b:sops but keeps the buffer's autocommands
+    vim.api.nvim_clear_autocmds({ group = group, buffer = bufnr })
     vim.api.nvim_create_autocmd("BufWriteCmd", {
         group = group,
         buffer = bufnr,
