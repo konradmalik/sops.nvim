@@ -168,32 +168,24 @@ function M.attach(bufnr)
 
     -- :bdelete forgets b:sops but keeps the buffer's autocommands
     vim.api.nvim_clear_autocmds({ group = group, buffer = bufnr })
-    vim.api.nvim_create_autocmd("BufWriteCmd", {
+    -- every kind of write: the whole buffer, part of it (:1,2w) or appended
+    -- (:w >>), into its own file or elsewhere
+    vim.api.nvim_create_autocmd({ "BufWriteCmd", "FileWriteCmd", "FileAppendCmd" }, {
         group = group,
         buffer = bufnr,
-        desc = "encrypt the buffer back into the file",
+        desc = "encrypt the buffer back into its file, write nothing else decrypted",
         callback = function(args)
-            if full_path(args.file) == full_path(vim.api.nvim_buf_get_name(bufnr)) then
+            local whole = args.event == "BufWriteCmd"
+            if whole and full_path(args.file) == full_path(vim.api.nvim_buf_get_name(bufnr)) then
                 return write(bufnr)
             end
             -- a copy of the ciphertext is as safe as the original, but
             -- plaintext would have to be encrypted into our own file
-            if vim.b[bufnr].sops_plaintext then
+            if vim.b[bufnr].sops_plaintext or not detect.is_encrypted(get_lines(bufnr)) then
                 return notify(
                     "cannot write a decrypted buffer elsewhere, use :saveas",
                     vim.log.levels.ERROR
                 )
-            end
-            vim.fn.writefile(get_lines(bufnr), args.file)
-        end,
-    })
-    vim.api.nvim_create_autocmd({ "FileWriteCmd", "FileAppendCmd" }, {
-        group = group,
-        buffer = bufnr,
-        desc = "write part of the buffer, unless it is decrypted",
-        callback = function(args)
-            if vim.b[bufnr].sops_plaintext then
-                return notify("cannot write part of a decrypted buffer", vim.log.levels.ERROR)
             end
             local first = vim.api.nvim_buf_get_mark(bufnr, "[")[1]
             local last = vim.api.nvim_buf_get_mark(bufnr, "]")[1]
