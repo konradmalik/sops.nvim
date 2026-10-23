@@ -26,29 +26,17 @@ end
 ---@return string[]
 local function get_lines(bufnr) return vim.api.nvim_buf_get_lines(bufnr, 0, -1, false) end
 
----What the file on disk looked like when the buffer last matched it.
+---What the file at `path` looks like on disk, nil when there is none.
 ---@param path string
 ---@return string?
 local function stamp(path)
     local stat = vim.uv.fs_stat(path)
-    return stat and ("%d.%d:%d"):format(stat.mtime.sec, stat.mtime.nsec, stat.size)
+    return stat and ("%s %d.%d %d"):format(path, stat.mtime.sec, stat.mtime.nsec, stat.size)
 end
 
+---Note that the buffer matches its file on disk right now.
 ---@param bufnr integer
-local function remember(bufnr)
-    local path = vim.api.nvim_buf_get_name(bufnr)
-    vim.b[bufnr].sops_stamp = { path = path, stamp = stamp(path) }
-end
-
----Whether the file changed on disk since the buffer last matched it. A buffer
----that was just renamed, by :saveas say, has nothing to compare against.
----@param bufnr integer
----@param path string
----@return boolean
-local function changed_on_disk(bufnr, path)
-    local known = vim.b[bufnr].sops_stamp
-    return known ~= nil and known.path == path and stamp(path) ~= known.stamp
-end
+local function remember(bufnr) vim.b[bufnr].sops_stamp = stamp(vim.api.nvim_buf_get_name(bufnr)) end
 
 ---@param bufnr integer
 ---@param lines string[]
@@ -92,9 +80,12 @@ end
 ---@param bufnr integer
 local function write(bufnr)
     local path = vim.api.nvim_buf_get_name(bufnr)
+    local plain = vim.b[bufnr].sops_plaintext
 
-    -- writing goes around neovim, so its own check for this never runs
-    if vim.v.cmdbang == 0 and changed_on_disk(bufnr, path) then
+    -- writing goes around neovim, so its own check for this never runs; a
+    -- file that does not exist yet, after :saveas say, cannot have changed
+    local now = stamp(path)
+    if vim.v.cmdbang == 0 and now and now ~= vim.b[bufnr].sops_stamp then
         notify(
             ("%s changed on disk, use :w! to overwrite it"):format(pretty_name(bufnr)),
             vim.log.levels.ERROR
@@ -104,12 +95,10 @@ local function write(bufnr)
 
     -- formatters hook in here; only for plaintext, reformatted ciphertext
     -- is nobody's business
-    if vim.b[bufnr].sops_plaintext then
-        vim.api.nvim_exec_autocmds("BufWritePre", { buffer = bufnr })
-    end
+    if plain then vim.api.nvim_exec_autocmds("BufWritePre", { buffer = bufnr }) end
     local lines = get_lines(bufnr)
 
-    if vim.b[bufnr].sops_plaintext then
+    if plain then
         local ok, err = cli.encrypt(path, lines)
         if not ok then
             notify(("cannot encrypt %s\n%s"):format(pretty_name(bufnr), err), vim.log.levels.ERROR)
