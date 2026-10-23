@@ -48,7 +48,7 @@ The same state is available as `require("sops").is_plaintext()`.
 
 - only filetypes sops can parse: `yaml`, `json`, `env`, `dosini` and `confini`.
 - `:SopsToggle` skips buffers with unsaved changes, save or undo them first
-- format on save does not run on these buffers, `BufWritePre` is not fired
+- format on save only runs on plaintext, `BufWritePre` is not fired for ciphertext
 - `:w other-file` is refused, use `:saveas`
 - sops is killed after 30s if something goes wrong and leaves its own temporary decrypted
   copy behind in `$TMPDIR`

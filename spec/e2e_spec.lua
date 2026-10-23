@@ -274,4 +274,26 @@ describe("with a real sops", function()
         local lines = utils.get_buf_lines(bufnr)
         assert.are.same({ lines[1], lines[2], lines[1] }, vim.fn.readfile(part))
     end)
+
+    it("lets formatters run before encrypting, but not on ciphertext", function()
+        local formatted = 0
+        local id = vim.api.nvim_create_autocmd("BufWritePre", {
+            pattern = "*",
+            callback = function(args)
+                formatted = formatted + 1
+                vim.api.nvim_buf_set_lines(args.buf, 0, 1, false, { "foo: formatted" })
+            end,
+        })
+        local bufnr = utils.open(encrypted)
+        vim.bo[bufnr].modified = true
+
+        vim.cmd.write()
+        sops.toggle()
+        vim.cmd.write()
+        vim.api.nvim_del_autocmd(id)
+
+        assert.are.equal(1, formatted)
+        assert.are.same({ "foo: formatted", "password: " .. secret }, utils.decrypt(encrypted))
+        assert.is_false(vim.bo[bufnr].modified)
+    end)
 end)
