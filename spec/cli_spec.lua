@@ -3,6 +3,7 @@ local utils = require("test.utils")
 
 ---Put a fake `sops` running `script` first on $PATH for the tests in the block.
 ---@param script string
+---@return string dir where it lives
 local function fake_sops(script)
     local dir, path = vim.fn.tempname(), vim.env.PATH
 
@@ -45,7 +46,7 @@ end)
 
 describe("sops that is slow", function()
     -- `sops decrypt <path>` prints the file as it is
-    local dir = fake_sops('sleep 0.3; cat "$2"')
+    local dir = fake_sops('sleep 0.5; cat "$2"')
     local encrypted =
         { "password: ENC[AES256_GCM,data:Tr7o,type:str]", "sops:", "    version: 3.13.3" }
 
@@ -60,18 +61,24 @@ describe("sops that is slow", function()
 
     it("decrypts every buffer at once on toggle", function()
         local sops = require("sops")
+        if sops.is_plaintext() then sops.toggle() end
+        local bufs = {}
         for i = 1, 3 do
             local path = vim.fs.joinpath(dir, i .. ".yaml")
             vim.fn.writefile(encrypted, path)
             vim.cmd.edit(path)
-            sops.attach(vim.api.nvim_get_current_buf())
+            table.insert(bufs, vim.api.nvim_get_current_buf())
+            sops.attach(bufs[i])
         end
 
         local start = vim.uv.hrtime()
         sops.toggle()
         local took = (vim.uv.hrtime() - start) / 1e6
+        local shown = vim.tbl_map(function(bufnr) return vim.b[bufnr].sops_plaintext end, bufs)
         sops.toggle()
 
-        assert.is_true(took < 600, ("took %dms"):format(took))
+        assert.are.same({ true, true, true }, shown)
+        -- one after another it would take 1.5s
+        assert.is_true(took < 1000, ("took %dms"):format(took))
     end)
 end)
