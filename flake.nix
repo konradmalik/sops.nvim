@@ -110,7 +110,7 @@
 
           lint-lua = mkCheck "lint-lua" [
             pkgs.luajitPackages.luacheck
-          ] "luacheck --codes --no-cache lua plugin spec";
+          ] "luacheck --codes --no-cache lua plugin spec test";
 
           tests = mkCheck "tests" (
             (with pkgs.luajitPackages; [
