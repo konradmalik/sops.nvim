@@ -14,7 +14,7 @@ file on disk and `:SopsToggle` swaps what that buffer shows between ciphertext a
 plaintext. No side buffers, no side windows, no temporary files, so quickfix,
 winbar, statusline and everything else keep behaving as usual.
 
-Needs `sops` on `$PATH`.
+Needs neovim 0.10 or newer and `sops` on `$PATH`.
 
 There are many similar plugins already. I was not fully satisfied with any of them, so I made my own.
 
@@ -53,6 +53,8 @@ The same state is available as `require("sops").is_plaintext()`.
 - sops is killed after 30s if something goes wrong and leaves its own temporary decrypted
   copy behind in `$TMPDIR`
 - a yanked secret still ends up in registers and in shada
+- language servers and completion plugins attached to the buffer get the plaintext like any
+  other buffer contents, and some of them log it or send it over the network
 
 ## Reference
 
