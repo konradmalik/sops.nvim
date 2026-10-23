@@ -7,10 +7,6 @@ local editor = [[sh -c 'cat > "$0"; [ -s "$0" ]']]
 -- What `sops edit` exits with when the plaintext came back unchanged.
 local unchanged = 200
 
--- A key can live on a hardware token or behind the network, but sops must
--- never be able to hang neovim.
-local timeout = 30000
-
 ---@param lines string[]
 ---@return string
 local function to_stdin(lines) return table.concat(lines, "\n") .. "\n" end
@@ -21,6 +17,18 @@ local function to_lines(out) return vim.split(((out or ""):gsub("\n$", "")), "\n
 
 local M = {}
 
+---How long sops may take, in milliseconds. A key can live on a hardware token
+---or behind the network, but sops must never be able to hang neovim.
+M.timeout = 30000
+
+---@param res vim.SystemCompleted
+---@return string
+local function failure(res)
+    -- what vim.system reports when it had to kill the process
+    if res.code == 124 then return ("sops did not finish within %gs"):format(M.timeout / 1000) end
+    return vim.trim(res.stderr or "")
+end
+
 ---Decrypt the file at `path`.
 ---
 ---It is read from disk rather than piped in from the buffer on purpose:
@@ -30,8 +38,8 @@ local M = {}
 ---@param path string
 ---@return string[]? lines, string? err
 function M.decrypt(path)
-    local res = vim.system({ "sops", "decrypt", path }, { text = true }):wait(timeout)
-    if res.code ~= 0 then return nil, vim.trim(res.stderr or "") end
+    local res = vim.system({ "sops", "decrypt", path }, { text = true }):wait(M.timeout)
+    if res.code ~= 0 then return nil, failure(res) end
     return to_lines(res.stdout), nil
 end
 
@@ -46,8 +54,8 @@ function M.encrypt(path, lines)
         env = { EDITOR = editor },
         stdin = to_stdin(lines),
         text = true,
-    }):wait(timeout)
-    if res.code ~= 0 and res.code ~= unchanged then return false, vim.trim(res.stderr or "") end
+    }):wait(M.timeout)
+    if res.code ~= 0 and res.code ~= unchanged then return false, failure(res) end
     return true, nil
 end
 
