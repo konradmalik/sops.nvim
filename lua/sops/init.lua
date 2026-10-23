@@ -196,27 +196,24 @@ function M.toggle()
     plaintext = not plaintext
     notify(plaintext and "showing plaintext" or "showing ciphertext", vim.log.levels.INFO)
 
-    local bufs = vim.tbl_filter(function(bufnr)
-        if not vim.api.nvim_buf_is_loaded(bufnr) or not vim.b[bufnr].sops then return false end
-        if vim.bo[bufnr].modified then
-            notify(
-                ("%s has unsaved changes, left as is"):format(pretty_name(bufnr)),
-                vim.log.levels.WARN
-            )
-            return false
-        end
-        return true
-    end, vim.api.nvim_list_bufs())
-
-    -- start every sops first, each of them may be waiting on the network
-    local decrypting = {}
-    if plaintext then
-        for _, bufnr in ipairs(bufs) do
-            decrypting[bufnr] = cli.decrypt(vim.api.nvim_buf_get_name(bufnr))
+    -- start every sops before waiting on any, each may be waiting on the network
+    local pending = {}
+    for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_loaded(bufnr) and vim.b[bufnr].sops then
+            if vim.bo[bufnr].modified then
+                notify(
+                    ("%s has unsaved changes, left as is"):format(pretty_name(bufnr)),
+                    vim.log.levels.WARN
+                )
+            elseif plaintext then
+                table.insert(pending, { bufnr, cli.decrypt(vim.api.nvim_buf_get_name(bufnr)) })
+            else
+                table.insert(pending, { bufnr })
+            end
         end
     end
-    for _, bufnr in ipairs(bufs) do
-        render(bufnr, decrypting[bufnr])
+    for _, p in ipairs(pending) do
+        render(p[1], p[2])
     end
 end
 
