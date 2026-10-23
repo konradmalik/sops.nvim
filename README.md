@@ -33,6 +33,7 @@ There are many similar plugins already. I was not fully satisfied with any of th
 - saves through `sops edit`, which reuses the file's existing data key and
   recipients, so changing one value changes one line in git
 - verifies after every write that what landed on disk is encrypted
+- refuses to write over a file that changed on disk since it was read, `:w!` does it anyway
 - `:saveas` writes an encrypted copy using `.sops.yaml` for creation rules
 
 Every buffer it takes over gets two variables, useful for a statusline:
