@@ -237,4 +237,15 @@ describe("with a real sops", function()
         assert.is_false(vim.b[bufnr].sops_plaintext)
         assert.is_true(notified("cannot decrypt"))
     end)
+
+    it("writes a buffer without changes without complaining", function()
+        local bufnr = utils.open(encrypted)
+        sops.toggle()
+
+        vim.cmd.write()
+
+        assert.are.same({}, notifications_matching("cannot"))
+        assert.is_false(vim.bo[bufnr].modified)
+        assert.are.same(fixture, utils.decrypt(encrypted))
+    end)
 end)
