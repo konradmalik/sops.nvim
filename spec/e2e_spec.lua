@@ -261,7 +261,7 @@ describe("with a real sops", function()
 
         assert.are.equal(0, vim.fn.filereadable(part))
         assert.are.same({ "existing: line" }, vim.fn.readfile(appended))
-        assert.is_true(notified("cannot write part"))
+        assert.is_true(notified("cannot write a decrypted buffer elsewhere"))
     end)
 
     it("still writes part of the ciphertext elsewhere", function()
@@ -312,6 +312,17 @@ describe("with a real sops", function()
         assert.are.equal(copy, vim.api.nvim_buf_get_name(bufnr))
         assert.is_not.matches(secret, utils.read(copy))
         assert.are.same(fixture, utils.decrypt(copy))
+    end)
+
+    it("refuses to copy a buffer that does not look encrypted", function()
+        local elsewhere = vim.fs.joinpath(dir, "elsewhere.yaml")
+        local bufnr = utils.open(encrypted)
+        vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, fixture)
+
+        pcall(function() vim.cmd("write " .. elsewhere) end)
+
+        assert.are.equal(0, vim.fn.filereadable(elsewhere))
+        assert.is_true(notified("cannot write a decrypted buffer elsewhere"))
     end)
 
     it("writes a copy of the ciphertext to another file", function()
