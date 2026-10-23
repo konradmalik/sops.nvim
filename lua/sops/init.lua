@@ -26,6 +26,30 @@ end
 ---@return string[]
 local function get_lines(bufnr) return vim.api.nvim_buf_get_lines(bufnr, 0, -1, false) end
 
+---What the file on disk looked like when the buffer last matched it.
+---@param path string
+---@return string?
+local function stamp(path)
+    local stat = vim.uv.fs_stat(path)
+    return stat and ("%d.%d:%d"):format(stat.mtime.sec, stat.mtime.nsec, stat.size)
+end
+
+---@param bufnr integer
+local function remember(bufnr)
+    local path = vim.api.nvim_buf_get_name(bufnr)
+    vim.b[bufnr].sops_stamp = { path = path, stamp = stamp(path) }
+end
+
+---Whether the file changed on disk since the buffer last matched it. A buffer
+---that was just renamed, by :saveas say, has nothing to compare against.
+---@param bufnr integer
+---@param path string
+---@return boolean
+local function changed_on_disk(bufnr, path)
+    local known = vim.b[bufnr].sops_stamp
+    return known ~= nil and known.path == path and stamp(path) ~= known.stamp
+end
+
 ---@param bufnr integer
 ---@param lines string[]
 local function set_lines(bufnr, lines)
@@ -49,6 +73,7 @@ local function render(bufnr)
         end
         set_lines(bufnr, vim.fn.readfile(path))
         vim.b[bufnr].sops_plaintext = false
+        remember(bufnr)
         return
     end
 
@@ -60,12 +85,22 @@ local function render(bufnr)
 
     set_lines(bufnr, lines)
     vim.b[bufnr].sops_plaintext = true
+    remember(bufnr)
 end
 
 ---@param bufnr integer
 local function write(bufnr)
     local path = vim.api.nvim_buf_get_name(bufnr)
     local lines = get_lines(bufnr)
+
+    -- writing goes around neovim, so its own check for this never runs
+    if vim.v.cmdbang == 0 and changed_on_disk(bufnr, path) then
+        notify(
+            ("%s changed on disk, use :w! to overwrite it"):format(pretty_name(bufnr)),
+            vim.log.levels.ERROR
+        )
+        return
+    end
 
     if vim.b[bufnr].sops_plaintext then
         local ok, err = cli.encrypt(path, lines)
@@ -95,6 +130,7 @@ local function write(bufnr)
 
     -- leaving the buffer modified is what tells neovim a write failed
     vim.bo[bufnr].modified = false
+    remember(bufnr)
     vim.api.nvim_exec_autocmds("BufWritePost", { buffer = bufnr })
 end
 
@@ -129,19 +165,6 @@ function M.attach(bufnr)
                 return notify("cannot write elsewhere, use :saveas", vim.log.levels.ERROR)
             end
             write(bufnr)
-        end,
-    })
-
-    -- we write the file behind neovim's back, so its cached timestamp goes
-    -- stale right after saving; without this the plaintext view would be
-    -- silently reloaded away on the next focus
-    vim.api.nvim_create_autocmd("FileChangedShell", {
-        group = group,
-        buffer = bufnr,
-        desc = "never reload over a sops buffer we own",
-        callback = function()
-            local ours = vim.bo[bufnr].modified or vim.b[bufnr].sops_plaintext
-            vim.v.fcs_choice = ours and "" or "reload"
         end,
     })
 

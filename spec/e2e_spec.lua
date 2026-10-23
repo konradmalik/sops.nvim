@@ -164,4 +164,35 @@ describe("with a real sops", function()
         assert.is_true(vim.b[bufnr].sops_plaintext)
         assert.is_true(notified("unsaved changes"))
     end)
+
+    it("keeps showing the plaintext after a write", function()
+        local bufnr = utils.open(encrypted)
+        sops.toggle()
+        vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, { "foo: changed" })
+        vim.cmd.write()
+
+        vim.wait(1100)
+        vim.cmd.checktime()
+
+        assert.are.same({ "foo: changed", "password: " .. secret }, utils.get_buf_lines(bufnr))
+        assert.is_true(vim.b[bufnr].sops_plaintext)
+    end)
+
+    it("refuses to overwrite a file that changed on disk", function()
+        local bufnr = utils.open(encrypted)
+        sops.toggle()
+        vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, { "foo: changed" })
+        utils.edit_externally(encrypted, secret, "rotated")
+
+        pcall(vim.cmd.write)
+
+        assert.are.same({ "foo: bar", "password: rotated" }, utils.decrypt(encrypted))
+        assert.is_true(vim.bo[bufnr].modified)
+        assert.is_true(notified("changed on disk"))
+
+        vim.cmd("write!")
+
+        assert.are.same({ "foo: changed", "password: " .. secret }, utils.decrypt(encrypted))
+        assert.is_false(vim.bo[bufnr].modified)
+    end)
 end)

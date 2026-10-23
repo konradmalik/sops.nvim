@@ -66,6 +66,19 @@ return {
         return vim.fn.split(run({ "sops", "decrypt", path }, { text = true }).stdout, "\n")
     end,
 
+    ---Change the file the way someone else would, outside of neovim.
+    ---@param path string
+    ---@param from string
+    ---@param to string
+    edit_externally = function(path, from, to)
+        -- no `sed -i`, it takes different arguments on darwin
+        local editor = ([[sh -c 'sed s/%s/%s/ "$0" > "$0.new" && mv "$0.new" "$0"']]):format(
+            from,
+            to
+        )
+        run({ "sops", "edit", path }, { env = { EDITOR = editor } })
+    end,
+
     ---Open a file and set its filetype by hand: busted runs neovim with
     ---`-u NONE`, so there is no filetype detection to fire the event the
     ---plugin hooks into.
