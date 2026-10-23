@@ -14,6 +14,12 @@ local function notified(pattern)
     return vim.iter(notifications):any(function(msg) return msg:find(pattern) ~= nil end)
 end
 
+---@param pattern string
+---@return string[]
+local function notifications_matching(pattern)
+    return vim.tbl_filter(function(msg) return msg:find(pattern) ~= nil end, notifications)
+end
+
 if not utils.can_run_sops() then
     describe("with a real sops", function()
         pending("needs the sops and age-keygen binaries", function() end)
@@ -76,10 +82,7 @@ describe("with a real sops", function()
 
         sops.toggle()
 
-        assert.are.same(
-            {},
-            vim.tbl_filter(function(m) return m:find("cannot") ~= nil end, notifications)
-        )
+        assert.are.same({}, notifications_matching("cannot"))
         assert.are.same(fixture, utils.get_buf_lines(bufnr))
         assert.is_true(vim.b[bufnr].sops_plaintext)
         assert.is_false(vim.bo[bufnr].modified)
@@ -194,5 +197,18 @@ describe("with a real sops", function()
 
         assert.are.same({ "foo: changed", "password: " .. secret }, utils.decrypt(encrypted))
         assert.is_false(vim.bo[bufnr].modified)
+    end)
+
+    it("writes once after the buffer was deleted and opened again", function()
+        utils.open(encrypted)
+        vim.cmd.bdelete()
+        local bufnr = utils.open(encrypted)
+        sops.toggle()
+        vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, { "foo: changed" })
+
+        vim.cmd.write()
+
+        assert.are.same({}, notifications_matching("cannot"))
+        assert.are.same({ "foo: changed", "password: " .. secret }, utils.decrypt(encrypted))
     end)
 end)
