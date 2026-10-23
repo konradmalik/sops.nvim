@@ -63,7 +63,8 @@ end
 
 ---Show the buffer the way the global toggle says it should be shown.
 ---@param bufnr integer
-local function render(bufnr)
+---@param decrypting? fun(): string[]?, string? already started by cli.decrypt
+local function render(bufnr, decrypting)
     local path = vim.api.nvim_buf_get_name(bufnr)
 
     if not plaintext then
@@ -77,7 +78,7 @@ local function render(bufnr)
         return
     end
 
-    local lines, err = cli.decrypt(path)
+    local lines, err = (decrypting or cli.decrypt(path))()
     if not lines then
         notify(("cannot decrypt %s\n%s"):format(pretty_name(bufnr), err), vim.log.levels.ERROR)
         return
@@ -207,17 +208,27 @@ function M.toggle()
     plaintext = not plaintext
     notify(plaintext and "showing plaintext" or "showing ciphertext", vim.log.levels.INFO)
 
-    for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-        if vim.api.nvim_buf_is_loaded(bufnr) and vim.b[bufnr].sops then
-            if vim.bo[bufnr].modified then
-                notify(
-                    ("%s has unsaved changes, left as is"):format(pretty_name(bufnr)),
-                    vim.log.levels.WARN
-                )
-            else
-                render(bufnr)
-            end
+    local bufs = vim.tbl_filter(function(bufnr)
+        if not vim.api.nvim_buf_is_loaded(bufnr) or not vim.b[bufnr].sops then return false end
+        if vim.bo[bufnr].modified then
+            notify(
+                ("%s has unsaved changes, left as is"):format(pretty_name(bufnr)),
+                vim.log.levels.WARN
+            )
+            return false
         end
+        return true
+    end, vim.api.nvim_list_bufs())
+
+    -- start every sops first, each of them may be waiting on the network
+    local decrypting = {}
+    if plaintext then
+        for _, bufnr in ipairs(bufs) do
+            decrypting[bufnr] = cli.decrypt(vim.api.nvim_buf_get_name(bufnr))
+        end
+    end
+    for _, bufnr in ipairs(bufs) do
+        render(bufnr, decrypting[bufnr])
     end
 end
 

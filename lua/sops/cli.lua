@@ -35,12 +35,18 @@ end
 ---neovim gives a child process a socket for its stdin, and on linux a socket
 ---cannot be opened again through /dev/stdin. A buffer is only ever decrypted
 ---while it is unmodified, so the file holds the very same ciphertext anyway.
+---
+---Only starts sops, so that several files can be decrypted at once; the
+---returned function waits for the result.
 ---@param path string
----@return string[]? lines, string? err
+---@return fun(): string[]?, string? wait lines or an error
 function M.decrypt(path)
-    local res = vim.system({ "sops", "decrypt", path }, { text = true }):wait(M.timeout)
-    if res.code ~= 0 then return nil, failure(res) end
-    return to_lines(res.stdout), nil
+    local proc = vim.system({ "sops", "decrypt", path }, { text = true, timeout = M.timeout })
+    return function()
+        local res = proc:wait()
+        if res.code ~= 0 then return nil, failure(res) end
+        return to_lines(res.stdout), nil
+    end
 end
 
 ---Encrypt `lines` into the sops file at `path`. Going through `sops edit`
