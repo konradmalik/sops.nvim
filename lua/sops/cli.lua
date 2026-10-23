@@ -24,7 +24,7 @@ M.timeout = 30000
 ---@param res vim.SystemCompleted
 ---@return string
 local function failure(res)
-    -- what vim.system reports when it had to kill the process
+    -- what vim.system reports when it had to stop the process
     if res.code == 124 then return ("sops did not finish within %gs"):format(M.timeout / 1000) end
     return vim.trim(res.stderr or "")
 end
@@ -60,7 +60,8 @@ function M.encrypt(path, lines)
         env = { EDITOR = editor },
         stdin = to_stdin(lines),
         text = true,
-    }):wait(M.timeout)
+        timeout = M.timeout,
+    }):wait()
     if res.code ~= 0 and res.code ~= unchanged then return false, failure(res) end
     return true, nil
 end
