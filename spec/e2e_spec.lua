@@ -296,4 +296,21 @@ describe("with a real sops", function()
         assert.are.same({ "foo: formatted", "password: " .. secret }, utils.decrypt(encrypted))
         assert.is_false(vim.bo[bufnr].modified)
     end)
+
+    it("saves an encrypted copy with :saveas", function()
+        local copy = vim.fs.joinpath(dir, "copy.yaml")
+        local bufnr = utils.open(encrypted)
+        sops.toggle()
+        -- a new file takes its creation rules from the .sops.yaml sops finds
+        -- from the working directory
+        local cwd = vim.fn.chdir(dir)
+
+        vim.cmd.saveas(copy)
+        vim.fn.chdir(cwd)
+
+        assert.are.same({}, notifications_matching("cannot"))
+        assert.are.equal(copy, vim.api.nvim_buf_get_name(bufnr))
+        assert.is_not.matches(secret, utils.read(copy))
+        assert.are.same(fixture, utils.decrypt(copy))
+    end)
 end)
