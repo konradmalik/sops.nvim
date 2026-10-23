@@ -9,6 +9,15 @@ local metadata = {
 -- Every encrypted value carries this, whatever the format.
 local value = "ENC[AES256_GCM"
 
+---@param line string
+---@return boolean
+local function is_metadata(line)
+    for _, pattern in ipairs(metadata) do
+        if line:find(pattern) then return true end
+    end
+    return false
+end
+
 local M = {}
 
 ---An encrypted file has the metadata block and at least one encrypted value.
@@ -18,9 +27,7 @@ local M = {}
 function M.is_encrypted(lines)
     local meta, enc = false, false
     for _, line in ipairs(lines) do
-        if not meta then
-            meta = vim.iter(metadata):any(function(pattern) return line:find(pattern) ~= nil end)
-        end
+        if not meta then meta = is_metadata(line) end
         if not enc then enc = line:find(value, 1, true) ~= nil end
         if meta and enc then return true end
     end
