@@ -49,7 +49,7 @@ The same state is available as `require("sops").is_plaintext()`.
 - only filetypes sops can parse: `yaml`, `json`, `env`, `dosini` and `confini`.
 - `:SopsToggle` skips buffers with unsaved changes, save or undo them first
 - format on save only runs on plaintext, `BufWritePre` is not fired for ciphertext
-- `:w other-file` is refused, use `:saveas`
+- `:w other-file` copies the ciphertext, with the plaintext showing it is refused, use `:saveas`
 - sops is killed after 30s if something goes wrong and leaves its own temporary decrypted
   copy behind in `$TMPDIR`
 - a yanked secret still ends up in registers and in shada
