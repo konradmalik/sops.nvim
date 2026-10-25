@@ -1,4 +1,4 @@
--- How the sops metadata block starts in each of the formats sops can parse.
+-- Start of the sops metadata block, per format.
 local metadata = {
     "^%s*sops:", -- yaml
     '^%s*"sops":', -- json
@@ -6,7 +6,7 @@ local metadata = {
     "^%[sops%]", -- ini
 }
 
--- Every encrypted value carries this, whatever the format.
+-- Prefix of every encrypted value.
 local value = "ENC[AES256_GCM"
 
 ---@param line string
@@ -20,8 +20,7 @@ end
 
 local M = {}
 
----An encrypted file has the metadata block and at least one encrypted value.
----Anything less is a file that merely talks about sops.
+---Has the metadata block and at least one encrypted value.
 ---@param lines string[]
 ---@return boolean
 function M.is_encrypted(lines)

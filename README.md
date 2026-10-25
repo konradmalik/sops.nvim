@@ -9,66 +9,57 @@ Main aim:
 - simple, very lightweight and maintainable by me
 - nothing decrypted written to disk unless you ask for it
 
-An encrypted file opens like any other file. The buffer stays mapped onto the real
-file on disk and `:SopsToggle` swaps what that buffer shows between ciphertext and
-plaintext. No side buffers, no side windows, no temporary files, so quickfix,
-winbar, statusline and everything else keep behaving as usual.
+`:SopsToggle` swaps the buffer between ciphertext and plaintext in place. No side
+buffers, windows or temp files, so everything else keeps working as usual.
 
 Needs neovim 0.10 or newer and `sops` on `$PATH`.
 
-There are many similar plugins already. I was not fully satisfied with any of them, so I made my own.
+Many similar plugins exist; none fully satisfied me.
 
 ## TL;DR
 
-- open an encrypted file: you see the ciphertext
-- `:SopsToggle`: every sops buffer starts showing its plaintext
-- toggle again, it goes back to ciphertext
-- `:w`: encrypts the active buffer back into the same file
+- open an encrypted file: ciphertext
+- `:SopsToggle`: every sops buffer shows plaintext, again: ciphertext
+- `:w`: encrypts back into the same file
 
 ## Notable features
 
 - detects encrypted files by their content
 - one global toggle
 - turns off `swapfile` and `undofile` before anything is decrypted
-- saves through `sops edit`, which reuses the file's existing data key and
-  recipients, so changing one value changes one line in git
-- verifies after every write that what landed on disk is encrypted
-- refuses to write over a file that changed on disk since it was read, `:w!` does it anyway
-- writes anywhere else (`:w other`, `:1,2w file`, `:w >> file`) write what the buffer shows
-- `:saveas` writes an encrypted copy using `.sops.yaml` for creation rules
+- saves via `sops edit`: same data key, so one changed value is one changed line
+- verifies every write is encrypted on disk
+- refuses to overwrite a file changed on disk, unless `:w!`
+- `:w other`, `:1,2w file`, `:w >> file` write what the buffer shows
+- `:saveas` writes an encrypted copy using `.sops.yaml`
 
-Every buffer it takes over gets two variables, useful for a statusline:
+For a statusline:
 
-- `b:sops`, set on every encrypted buffer
-- `b:sops_plaintext`, whether that buffer currently shows its plaintext
-
-The same state is available as `require("sops").is_plaintext()`.
+- `b:sops`: set on encrypted buffers
+- `b:sops_plaintext`: whether the buffer shows plaintext
+- `require("sops").is_plaintext()`: the global toggle
 
 ## Limitations
 
-- only filetypes sops can parse: `yaml`, `json`, `env`, `dosini` and `confini`.
-- `:SopsToggle` skips buffers with unsaved changes, save or undo them first
-- format on save only runs on plaintext, `BufWritePre` is not fired for ciphertext
-- sops is stopped after 30s if something goes wrong and leaves its own temporary decrypted
-  copy behind in `$TMPDIR`
-- a yanked secret still ends up in registers and in shada
-- language servers and completion plugins attached to the buffer get the plaintext like any
-  other buffer contents, and some of them log it or send it over the network
+- filetypes: `yaml`, `json`, `env`, `dosini`, `confini`
+- `:SopsToggle` skips buffers with unsaved changes
+- `BufWritePre` (format on save) only fires for plaintext
+- sops is killed after 30s; it may leave a decrypted temp file in `$TMPDIR`
+- yanked secrets end up in registers and shada
+- LSPs and completion plugins see the plaintext, and may log or send it
 
 ## Reference
 
-For reference usage see [my neovim config](https://github.com/konradmalik/neovim-flake).
+See [my neovim config](https://github.com/konradmalik/neovim-flake).
 
 ## Development
 
-Enter the devshell with `nix develop` (or direnv, see `.envrc`). It links a generated `.luarc.json` for
-lua-language-server.
+`nix develop` (or direnv) enters the devshell and links `.luarc.json`.
 
 ```bash
 $ nix fmt
 $ nix flake check
 ```
 
-`nix fmt` formats everything through treefmt (`treefmt.nix`). `nix flake check` covers formatting, shellcheck,
-luacheck, and the tests (busted using nvim as an interpreter, with sops and age for the end-to-end ones). In the
-devshell, `busted --lua=nlua` runs the tests directly.
+`nix flake check` runs format, shellcheck, luacheck and tests. In the devshell,
+`busted --lua=nlua` runs the tests directly.

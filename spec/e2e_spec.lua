@@ -4,8 +4,7 @@ local utils = require("test.utils")
 local secret = "s3cr3t"
 local fixture = { "foo: bar", "password: " .. secret }
 
----The plugin talks through `vim.notify`, which would otherwise print all over
----busted's output. Collect the messages instead, they are worth asserting on.
+---Collected `vim.notify` messages, to assert on and keep busted output clean.
 local notifications = {}
 
 ---@param pattern string
@@ -32,7 +31,6 @@ describe("with a real sops", function()
     local notify = vim.notify
 
     setup(function()
-        -- the plugin only wires itself up when its plugin/ file is sourced
         dofile("plugin/sops.lua")
         ---@diagnostic disable-next-line: duplicate-set-field
         vim.notify = function(msg) table.insert(notifications, msg) end
@@ -45,7 +43,7 @@ describe("with a real sops", function()
         dir = utils.prepare_dir()
         encrypted = utils.create_encrypted(dir, "secrets.yaml", fixture)
 
-        -- the toggle is global, so make sure every test starts encrypted
+        -- the toggle is global, start encrypted
         if sops.is_plaintext() then sops.toggle() end
     end)
 
@@ -131,7 +129,7 @@ describe("with a real sops", function()
     it("refuses to write a buffer whose contents are not encrypted", function()
         local bufnr = utils.open(encrypted)
         local before = utils.read(encrypted)
-        -- pretend the plaintext flag went wrong, the write must still not happen
+        -- the plaintext flag is wrong
         vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, fixture)
         vim.b[bufnr].sops_plaintext = false
 
@@ -298,8 +296,7 @@ describe("with a real sops", function()
         local copy = vim.fs.joinpath(dir, "copy.yaml")
         local bufnr = utils.open(encrypted)
         sops.toggle()
-        -- a new file takes its creation rules from the .sops.yaml sops finds
-        -- from the working directory
+        -- sops finds .sops.yaml from the working directory
         local cwd = vim.fn.chdir(dir)
 
         vim.cmd.saveas(copy)

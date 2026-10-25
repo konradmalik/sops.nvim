@@ -1,5 +1,4 @@
--- The filetypes sops can parse. Files encrypted with its `binary` input type
--- keep the name and extension of whatever they were, so they are not covered.
+-- Filetypes sops can parse; `binary` files are not covered.
 local filetypes = {
     "confini",
     "dosini",

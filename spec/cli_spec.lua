@@ -1,7 +1,7 @@
 local cli = require("sops.cli")
 local utils = require("test.utils")
 
----Put a fake `sops` running `script` first on $PATH for the tests in the block.
+---Fake `sops` running `script`, first on $PATH for the block.
 ---@param script string
 ---@return string dir where it lives
 local function fake_sops(script)
@@ -45,7 +45,7 @@ describe("sops that hangs", function()
 end)
 
 describe("sops that is slow", function()
-    -- `sops decrypt <path>` prints the file as it is
+    -- `sops decrypt <path>` prints the file
     local dir = fake_sops('sleep 0.5; cat "$2"')
     local encrypted =
         { "password: ENC[AES256_GCM,data:Tr7o,type:str]", "sops:", "    version: 3.13.3" }
@@ -78,7 +78,7 @@ describe("sops that is slow", function()
         sops.toggle()
 
         assert.are.same({ true, true, true }, shown)
-        -- one after another it would take 1.5s
+        -- sequentially it would take 1.5s
         assert.is_true(took < 1000, ("took %dms"):format(took))
     end)
 end)

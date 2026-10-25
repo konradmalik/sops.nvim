@@ -1,17 +1,17 @@
 local cli = require("sops.cli")
 local detect = require("sops.detect")
 
--- the buffer local autocommands, the global ones live in plugin/sops.lua
+-- buffer local autocommands; global ones are in plugin/sops.lua
 local group = vim.api.nvim_create_augroup("SopsBuffer", { clear = true })
 
----global on purpose, the toggle is not per buffer
+---global, the toggle is not per buffer
 local plaintext = false
 
 ---@param msg string
 ---@param level integer
 local function notify(msg, level) vim.notify("sops: " .. msg, level) end
 
----Expanded and with symlinks resolved, the way neovim names a buffer.
+---Absolute, symlinks resolved, like buffer names.
 ---@param path string
 ---@return string
 local function full_path(path) return vim.fn.resolve(vim.fn.fnamemodify(path, ":p")) end
@@ -26,7 +26,7 @@ end
 ---@return string[]
 local function get_lines(bufnr) return vim.api.nvim_buf_get_lines(bufnr, 0, -1, false) end
 
----What the file at `path` looks like on disk, nil when there is none.
+---Identifies the file's current state on disk, nil if missing.
 ---@param path string
 ---@return string?
 local function stamp(path)
@@ -34,14 +34,14 @@ local function stamp(path)
     return stat and ("%s %d.%d %d"):format(path, stat.mtime.sec, stat.mtime.nsec, stat.size)
 end
 
----Note that the buffer matches its file on disk right now.
+---Mark the buffer as in sync with its file.
 ---@param bufnr integer
 local function remember(bufnr) vim.b[bufnr].sops_stamp = stamp(vim.api.nvim_buf_get_name(bufnr)) end
 
 ---@param bufnr integer
 ---@param lines string[]
 local function set_lines(bufnr, lines)
-    -- undo must not be able to reach across a ciphertext/plaintext swap
+    -- no undo across a ciphertext/plaintext swap
     local undolevels = vim.bo[bufnr].undolevels
     vim.bo[bufnr].undolevels = -1
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
@@ -49,9 +49,9 @@ local function set_lines(bufnr, lines)
     vim.bo[bufnr].modified = false
 end
 
----Show the buffer the way the global toggle says it should be shown.
+---Show the buffer as the global toggle says.
 ---@param bufnr integer
----@param decrypting? fun(): string[]?, string? already started by cli.decrypt
+---@param decrypting? fun(): string[]?, string? started cli.decrypt
 local function render(bufnr, decrypting)
     local path = vim.api.nvim_buf_get_name(bufnr)
 
@@ -82,8 +82,7 @@ local function write(bufnr)
     local path = vim.api.nvim_buf_get_name(bufnr)
     local plain = vim.b[bufnr].sops_plaintext
 
-    -- writing goes around neovim, so its own check for this never runs; a
-    -- file that does not exist yet, after :saveas say, cannot have changed
+    -- we bypass neovim's own check; a new file (:saveas) cannot have changed
     local now = stamp(path)
     if vim.v.cmdbang == 0 and now and now ~= vim.b[bufnr].sops_stamp then
         notify(
@@ -93,8 +92,7 @@ local function write(bufnr)
         return
     end
 
-    -- formatters hook in here; only for plaintext, reformatted ciphertext
-    -- is nobody's business
+    -- formatters, plaintext only
     if plain then vim.api.nvim_exec_autocmds("BufWritePre", { buffer = bufnr }) end
     local lines = get_lines(bufnr)
 
@@ -107,7 +105,7 @@ local function write(bufnr)
     elseif detect.is_encrypted(lines) then
         vim.fn.writefile(lines, path)
     else
-        -- the buffer claims to hold ciphertext but does not: never write it out
+        -- claims ciphertext but is not
         notify(
             ("refusing to write %s, it does not look encrypted"):format(pretty_name(bufnr)),
             vim.log.levels.ERROR
@@ -115,7 +113,7 @@ local function write(bufnr)
         return
     end
 
-    -- and confirm what actually ended up in the file
+    -- verify what landed on disk
     if not detect.is_encrypted(vim.fn.readfile(path)) then
         notify(
             ("%s ON DISK IS NOT ENCRYPTED, encrypt it by hand now"):format(pretty_name(bufnr)),
@@ -124,7 +122,7 @@ local function write(bufnr)
         return
     end
 
-    -- leaving the buffer modified is what tells neovim a write failed
+    -- staying modified is how neovim learns a write failed
     vim.bo[bufnr].modified = false
     remember(bufnr)
     vim.api.nvim_exec_autocmds("BufWritePost", { buffer = bufnr })
@@ -132,15 +130,13 @@ end
 
 local M = {}
 
----Take over an encrypted buffer, so that it can be toggled and written back.
----Buffers that hold no sops file are left alone.
+---Take over an encrypted buffer; others are left alone.
 ---@param bufnr integer
 function M.attach(bufnr)
     if vim.b[bufnr].sops then
-        -- FileType fires again after a reload, but also on a mere :setfiletype,
-        -- which must not throw away unsaved changes
+        -- FileType also fires on :setfiletype, keep unsaved changes
         if vim.bo[bufnr].modified then return end
-        -- a reload brought the ciphertext back, whatever the flag says
+        -- a reload brings back ciphertext
         vim.b[bufnr].sops_plaintext = not detect.is_encrypted(get_lines(bufnr))
         render(bufnr)
         return
@@ -149,9 +145,7 @@ function M.attach(bufnr)
 
     vim.b[bufnr].sops = true
     vim.b[bufnr].sops_plaintext = false
-    -- the whole point: nothing decrypted may end up on disk. Both have to be
-    -- off before the first decryption, and turning 'swapfile' off deletes the
-    -- swap file neovim already made for the ciphertext.
+    -- off before the first decryption; this also deletes the existing swap file
     vim.bo[bufnr].swapfile = false
     vim.bo[bufnr].undofile = false
 
@@ -171,7 +165,7 @@ function M.attach(bufnr)
         end,
     })
 
-    -- neovim has just read the ciphertext, no need to read it again
+    -- neovim just read the ciphertext
     if plaintext then
         render(bufnr)
     else
@@ -179,12 +173,12 @@ function M.attach(bufnr)
     end
 end
 
----Switch every sops buffer between its encrypted and decrypted view.
+---Switch every sops buffer between ciphertext and plaintext.
 function M.toggle()
     plaintext = not plaintext
     notify(plaintext and "showing plaintext" or "showing ciphertext", vim.log.levels.INFO)
 
-    -- start every sops before waiting on any, each may be waiting on the network
+    -- start all before waiting on any, each may wait on the network
     local pending = {}
     for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
         if vim.api.nvim_buf_is_loaded(bufnr) and vim.b[bufnr].sops then
@@ -205,7 +199,7 @@ function M.toggle()
     end
 end
 
----Whether sops buffers are currently showing their plaintext.
+---Whether sops buffers show plaintext.
 ---@return boolean
 function M.is_plaintext() return plaintext end
 
