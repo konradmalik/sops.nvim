@@ -7,7 +7,7 @@ Transparent editing of [sops](https://github.com/getsops/sops) encrypted files.
 Main aim:
 
 - simple, very lightweight and maintainable by me
-- nothing decrypted ever written to disk
+- nothing decrypted written to disk unless you ask for it
 
 An encrypted file opens like any other file. The buffer stays mapped onto the real
 file on disk and `:SopsToggle` swaps what that buffer shows between ciphertext and
@@ -34,8 +34,7 @@ There are many similar plugins already. I was not fully satisfied with any of th
   recipients, so changing one value changes one line in git
 - verifies after every write that what landed on disk is encrypted
 - refuses to write over a file that changed on disk since it was read, `:w!` does it anyway
-- never writes a decrypted buffer anywhere but encrypted into its own file: `:w other-file`,
-  `:1,2w file` and `:w >> file` are refused, with the ciphertext showing they copy it
+- writes anywhere else (`:w other`, `:1,2w file`, `:w >> file`) write what the buffer shows
 - `:saveas` writes an encrypted copy using `.sops.yaml` for creation rules
 
 Every buffer it takes over gets two variables, useful for a statusline:

@@ -142,18 +142,29 @@ describe("with a real sops", function()
         assert.is_true(notified("does not look encrypted"))
     end)
 
-    it("refuses to write the buffer to another file", function()
+    it("writes the plaintext to another file as shown", function()
         local elsewhere = vim.fs.joinpath(dir, "elsewhere.yaml")
         local bufnr = utils.open(encrypted)
         sops.toggle()
         local before = utils.read(encrypted)
 
-        pcall(function() vim.cmd("write " .. elsewhere) end)
+        vim.cmd("write " .. elsewhere)
 
-        assert.are.equal(0, vim.fn.filereadable(elsewhere))
+        assert.are.same(fixture, vim.fn.readfile(elsewhere))
         assert.are.equal(before, utils.read(encrypted))
-        assert.is_true(vim.b[bufnr].sops_plaintext)
-        assert.is_true(notified("cannot write a decrypted buffer elsewhere"))
+        assert.are.equal(encrypted, vim.api.nvim_buf_get_name(bufnr))
+    end)
+
+    it("does not overwrite another file without :w!", function()
+        local elsewhere = vim.fs.joinpath(dir, "elsewhere.yaml")
+        vim.fn.writefile({ "existing: line" }, elsewhere)
+        utils.open(encrypted)
+
+        assert.has_error(function() vim.cmd("write " .. elsewhere) end)
+        assert.are.same({ "existing: line" }, vim.fn.readfile(elsewhere))
+
+        vim.cmd("write! " .. elsewhere)
+        assert.are.equal(utils.read(encrypted), utils.read(elsewhere))
     end)
 
     it("leaves buffers with unsaved changes as they are", function()
@@ -249,24 +260,10 @@ describe("with a real sops", function()
         assert.are.same(fixture, utils.decrypt(encrypted))
     end)
 
-    it("refuses to write part of the plaintext elsewhere", function()
-        local part, appended =
-            vim.fs.joinpath(dir, "part.yaml"), vim.fs.joinpath(dir, "appended.yaml")
-        vim.fn.writefile({ "existing: line" }, appended)
-        utils.open(encrypted)
-        sops.toggle()
-
-        pcall(vim.cmd, "1,1write " .. part)
-        pcall(vim.cmd, "write >> " .. appended)
-
-        assert.are.equal(0, vim.fn.filereadable(part))
-        assert.are.same({ "existing: line" }, vim.fn.readfile(appended))
-        assert.is_true(notified("cannot write a decrypted buffer elsewhere"))
-    end)
-
-    it("still writes part of the ciphertext elsewhere", function()
+    it("writes part of the buffer elsewhere as shown", function()
         local part = vim.fs.joinpath(dir, "part.yaml")
         local bufnr = utils.open(encrypted)
+        sops.toggle()
 
         vim.cmd("1,2write " .. part)
         vim.cmd("1write >> " .. part)
@@ -312,17 +309,6 @@ describe("with a real sops", function()
         assert.are.equal(copy, vim.api.nvim_buf_get_name(bufnr))
         assert.is_not.matches(secret, utils.read(copy))
         assert.are.same(fixture, utils.decrypt(copy))
-    end)
-
-    it("refuses to copy a buffer that does not look encrypted", function()
-        local elsewhere = vim.fs.joinpath(dir, "elsewhere.yaml")
-        local bufnr = utils.open(encrypted)
-        vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, fixture)
-
-        pcall(function() vim.cmd("write " .. elsewhere) end)
-
-        assert.are.equal(0, vim.fn.filereadable(elsewhere))
-        assert.is_true(notified("cannot write a decrypted buffer elsewhere"))
     end)
 
     it("writes a copy of the ciphertext to another file", function()
