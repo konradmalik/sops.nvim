@@ -190,6 +190,36 @@ describe("with a real sops", function()
         assert.is_true(vim.b[bufnr].sops_plaintext)
     end)
 
+    it("does not mistake its own write for a change on disk", function()
+        local bufnr = utils.open(encrypted)
+        sops.toggle()
+        local changed = false
+        local id = vim.api.nvim_create_autocmd("FileChangedShell", {
+            callback = function() changed = true end,
+        })
+        vim.wait(1100)
+        vim.cmd.write()
+        -- unsaved changes, or a stale timestamp would just reload silently
+        vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, { "foo: unsaved" })
+
+        vim.cmd.checktime()
+        vim.api.nvim_del_autocmd(id)
+
+        assert.is_false(changed)
+    end)
+
+    it("shows what another program wrote to the file", function()
+        local bufnr = utils.open(encrypted)
+        sops.toggle()
+        vim.wait(1100)
+        utils.edit_externally(encrypted, secret, "rotated")
+
+        vim.cmd.checktime()
+
+        assert.are.same({ "foo: bar", "password: rotated" }, utils.get_buf_lines(bufnr))
+        assert.is_true(vim.b[bufnr].sops_plaintext)
+    end)
+
     it("refuses to overwrite a file that changed on disk", function()
         local bufnr = utils.open(encrypted)
         sops.toggle()
