@@ -24,7 +24,8 @@ return {
     ---@return string
     prepare_dir = function()
         local res = run({ "mktemp", "-d", "-t", "sops-nvim-XXXXXX" }, { text = true })
-        local dir = vim.fn.split(res.stdout, "\n")[1]
+        -- resolved like buffer names are, /tmp is a symlink on darwin
+        local dir = assert(vim.uv.fs_realpath(vim.fn.split(res.stdout, "\n")[1]))
 
         local key = vim.fs.joinpath(dir, "key.txt")
         run({ "age-keygen", "-o", key })
