@@ -21,6 +21,7 @@ Many similar plugins exist; none fully satisfied me.
 - open an encrypted file: ciphertext
 - `:SopsToggle`: every sops buffer shows plaintext, again: ciphertext
 - `:w`: encrypts back into the same file
+- `:SopsEncrypt [file]`: encrypts a plain buffer into its file (or `file`), using `.sops.yaml`
 
 ## Notable features
 
@@ -32,6 +33,7 @@ Many similar plugins exist; none fully satisfied me.
 - refuses to overwrite a file changed on disk, unless `:w!`
 - `:w other`, `:1,2w file`, `:w >> file` write what the buffer shows
 - `:saveas` writes an encrypted copy using `.sops.yaml`
+- `:SopsEncrypt` pipes the buffer to sops, no plaintext temp file
 
 For a statusline:
 

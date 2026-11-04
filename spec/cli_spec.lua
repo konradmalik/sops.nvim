@@ -42,6 +42,13 @@ describe("sops that hangs", function()
         assert.is_false(ok)
         assert.are.equal("sops did not finish within 0.1s", err)
     end)
+
+    it("is killed and says so when encrypting a new file", function()
+        local lines, err = cli.encrypt_new("secrets.yaml", { "foo: bar" })
+
+        assert.is_nil(lines)
+        assert.are.equal("sops did not finish within 0.1s", err)
+    end)
 end)
 
 describe("sops that is slow", function()

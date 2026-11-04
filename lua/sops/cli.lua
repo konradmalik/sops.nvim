@@ -42,11 +42,13 @@ end
 
 ---Encrypt `lines` into `path`. `sops edit` keeps the existing data key and
 ---recipients, so one changed value is one changed line.
----@param path string
+---@param path string absolute
 ---@param lines string[]
 ---@return boolean ok, string? err
 function M.encrypt(path, lines)
     local res = vim.system({ "sops", "edit", path }, {
+        -- a new file (:saveas) needs .sops.yaml, sops looks from its cwd up
+        cwd = vim.fs.dirname(path),
         env = { EDITOR = editor },
         stdin = to_stdin(lines),
         text = true,
@@ -54,6 +56,23 @@ function M.encrypt(path, lines)
     }):wait()
     if res.code ~= 0 and res.code ~= unchanged then return false, failure(res) end
     return true, nil
+end
+
+---Encrypt plaintext `lines` as if they were `path`, which picks the
+---`.sops.yaml` rule and format. A fresh data key; `path` is not read.
+---@param path string absolute
+---@param lines string[]
+---@return string[]? lines, string? err
+function M.encrypt_new(path, lines)
+    local res = vim.system({ "sops", "encrypt", "--filename-override", path }, {
+        -- sops looks for .sops.yaml from its cwd up
+        cwd = vim.fs.dirname(path),
+        stdin = to_stdin(lines),
+        text = true,
+        timeout = M.timeout,
+    }):wait()
+    if res.code ~= 0 then return nil, failure(res) end
+    return to_lines(res.stdout), nil
 end
 
 return M

@@ -77,6 +77,18 @@ local function render(bufnr, decrypting)
     remember(bufnr)
 end
 
+---Loudly complain unless the buffer's file is encrypted on disk.
+---@param bufnr integer
+---@return boolean
+local function encrypted_on_disk(bufnr)
+    if detect.is_encrypted(vim.fn.readfile(vim.api.nvim_buf_get_name(bufnr))) then return true end
+    notify(
+        ("%s ON DISK IS NOT ENCRYPTED, encrypt it by hand now"):format(pretty_name(bufnr)),
+        vim.log.levels.ERROR
+    )
+    return false
+end
+
 ---@param bufnr integer
 local function write(bufnr)
     local path = vim.api.nvim_buf_get_name(bufnr)
@@ -113,14 +125,7 @@ local function write(bufnr)
         return
     end
 
-    -- verify what landed on disk
-    if not detect.is_encrypted(vim.fn.readfile(path)) then
-        notify(
-            ("%s ON DISK IS NOT ENCRYPTED, encrypt it by hand now"):format(pretty_name(bufnr)),
-            vim.log.levels.ERROR
-        )
-        return
-    end
+    if not encrypted_on_disk(bufnr) then return end
 
     -- staying modified is how neovim learns a write failed
     vim.bo[bufnr].modified = false
@@ -197,6 +202,64 @@ function M.toggle()
     for _, p in ipairs(pending) do
         render(p[1], p[2])
     end
+end
+
+---Encrypt a plain buffer into its file, then attach it. sops reads the
+---buffer on stdin, nothing decrypted touches the disk.
+---@param bufnr integer
+---@param file? string as typed for :saveas
+function M.encrypt(bufnr, file)
+    local lines = get_lines(bufnr)
+    if vim.bo[bufnr].buftype ~= "" then
+        notify("only file buffers can be encrypted", vim.log.levels.ERROR)
+        return
+    end
+    if vim.b[bufnr].sops or detect.is_encrypted(lines) then
+        notify(("%s is already encrypted"):format(pretty_name(bufnr)), vim.log.levels.WARN)
+        return
+    end
+    if not file and vim.api.nvim_buf_get_name(bufnr) == "" then
+        notify("give the buffer a name: :SopsEncrypt {file}", vim.log.levels.ERROR)
+        return
+    end
+
+    -- neovim's :write/:saveas checks the name, records the timestamp, makes no
+    -- backup; we only write the ciphertext
+    local id = vim.api.nvim_create_autocmd("BufWriteCmd", {
+        group = group,
+        buffer = bufnr,
+        once = true,
+        desc = "encrypt the buffer into its file",
+        callback = function()
+            local path = vim.api.nvim_buf_get_name(bufnr)
+            local cipher, err = cli.encrypt_new(path, lines)
+            if not cipher then
+                notify(
+                    ("cannot encrypt %s\n%s"):format(pretty_name(bufnr), err),
+                    vim.log.levels.ERROR
+                )
+                return
+            end
+            vim.fn.writefile(cipher, path)
+            -- also drops the plaintext from undo; not modified tells neovim it worked
+            if encrypted_on_disk(bufnr) then set_lines(bufnr, cipher) end
+        end,
+    })
+    local ok, err = pcall(
+        vim.api.nvim_buf_call,
+        bufnr,
+        function() vim.cmd(file and "saveas " .. file or "write") end
+    )
+    pcall(vim.api.nvim_del_autocmd, id)
+    if not ok then
+        notify(tostring(err):match("E%d+:.*") or tostring(err), vim.log.levels.ERROR)
+        return
+    end
+    if not detect.is_encrypted(get_lines(bufnr)) then return end
+
+    -- :saveas may have attached it via FileType already
+    if not vim.b[bufnr].sops then M.attach(bufnr) end
+    notify(("encrypted %s"):format(pretty_name(bufnr)), vim.log.levels.INFO)
 end
 
 ---Whether sops buffers show plaintext.

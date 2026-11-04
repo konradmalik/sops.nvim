@@ -326,11 +326,8 @@ describe("with a real sops", function()
         local copy = vim.fs.joinpath(dir, "copy.yaml")
         local bufnr = utils.open(encrypted)
         sops.toggle()
-        -- sops finds .sops.yaml from the working directory
-        local cwd = vim.fn.chdir(dir)
 
         vim.cmd.saveas(copy)
-        vim.fn.chdir(cwd)
 
         assert.are.same({}, notifications_matching("cannot"))
         assert.are.equal(copy, vim.api.nvim_buf_get_name(bufnr))
@@ -347,5 +344,145 @@ describe("with a real sops", function()
         assert.are.equal(utils.read(encrypted), utils.read(elsewhere))
         assert.are.same(fixture, utils.decrypt(elsewhere))
         assert.are.equal(encrypted, vim.api.nvim_buf_get_name(bufnr))
+    end)
+
+    describe(":SopsEncrypt", function()
+        local plain
+
+        -- .sops.yaml is found from the file, not the working directory
+        before_each(function()
+            plain = vim.fs.joinpath(dir, "plain.yaml")
+            vim.fn.writefile({ "foo: bar" }, plain)
+        end)
+
+        it("encrypts the buffer, unsaved changes included, into its file", function()
+            local bufnr = utils.open(plain)
+            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, fixture)
+
+            vim.cmd.SopsEncrypt()
+
+            assert.are.same({}, notifications_matching("cannot"))
+            assert.is_not.matches(secret, utils.read(plain))
+            assert.are.same(fixture, utils.decrypt(plain))
+            assert.is_true(vim.b[bufnr].sops)
+            assert.is_false(vim.bo[bufnr].modified)
+            assert.is_false(vim.bo[bufnr].swapfile)
+            assert.matches("ENC%[AES256_GCM", utils.get_buf_lines(bufnr)[1])
+        end)
+
+        it("shows the plaintext again when the toggle is on", function()
+            sops.toggle()
+            local bufnr = utils.open(plain)
+            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, fixture)
+
+            vim.cmd.SopsEncrypt()
+
+            assert.are.same(fixture, utils.get_buf_lines(bufnr))
+            assert.is_true(vim.b[bufnr].sops_plaintext)
+            assert.is_not.matches(secret, utils.read(plain))
+        end)
+
+        it("writes through sops afterwards", function()
+            local bufnr = utils.open(plain)
+            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, fixture)
+            vim.cmd.SopsEncrypt()
+            sops.toggle()
+            vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, { "foo: changed" })
+
+            vim.cmd.write()
+
+            assert.are.same({ "foo: changed", "password: " .. secret }, utils.decrypt(plain))
+        end)
+
+        it("leaves an encrypted buffer alone", function()
+            local before = utils.read(encrypted)
+            utils.open(encrypted)
+
+            vim.cmd.SopsEncrypt()
+
+            assert.are.equal(before, utils.read(encrypted))
+            assert.is_true(notified("already encrypted"))
+        end)
+
+        it("creates a file that does not exist yet", function()
+            local new = vim.fs.joinpath(dir, "new.yaml")
+            local bufnr = utils.open(new)
+            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, fixture)
+
+            vim.cmd.SopsEncrypt()
+
+            assert.are.same(fixture, utils.decrypt(new))
+            assert.is_true(vim.b[bufnr].sops)
+        end)
+
+        it("asks for a name for a buffer without one", function()
+            vim.cmd.enew()
+            local bufnr = vim.api.nvim_get_current_buf()
+            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, fixture)
+
+            vim.cmd.SopsEncrypt()
+
+            assert.is_true(notified("give the buffer a name"))
+            assert.are.same(fixture, utils.get_buf_lines(bufnr))
+            assert.is_nil(vim.b[bufnr].sops)
+        end)
+
+        it("encrypts into the given file and renames the buffer", function()
+            local named = vim.fs.joinpath(dir, "my named.yaml")
+            vim.cmd.enew()
+            local bufnr = vim.api.nvim_get_current_buf()
+            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, fixture)
+
+            vim.cmd("SopsEncrypt " .. vim.fn.fnameescape(named))
+
+            assert.are.same({}, notifications_matching("cannot"))
+            assert.are.equal(named, vim.api.nvim_buf_get_name(bufnr))
+            assert.are.same(fixture, utils.decrypt(named))
+            assert.is_true(vim.b[bufnr].sops)
+            assert.is_false(vim.bo[bufnr].modified)
+        end)
+
+        it("does not overwrite another existing file", function()
+            vim.cmd.enew()
+            local bufnr = vim.api.nvim_get_current_buf()
+            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, fixture)
+
+            vim.cmd.SopsEncrypt(plain)
+
+            assert.is_true(notified("exists"))
+            assert.are.same({ "foo: bar" }, vim.fn.readfile(plain))
+            assert.are.equal("", vim.api.nvim_buf_get_name(bufnr))
+        end)
+
+        it("keeps the plaintext when encryption fails", function()
+            local bufnr = utils.open(plain)
+            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, fixture)
+            vim.fn.delete(vim.fs.joinpath(dir, ".sops.yaml"))
+
+            vim.cmd.SopsEncrypt()
+
+            assert.is_true(notified("cannot encrypt"))
+            assert.are.same(fixture, utils.get_buf_lines(bufnr))
+            assert.are.same({ "foo: bar" }, vim.fn.readfile(plain))
+            assert.is_nil(vim.b[bufnr].sops)
+        end)
+
+        it("does not mistake its own write for a change on disk", function()
+            local bufnr = utils.open(plain)
+            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, fixture)
+            local changed = false
+            local id = vim.api.nvim_create_autocmd("FileChangedShell", {
+                callback = function() changed = true end,
+            })
+            vim.wait(1100)
+            vim.cmd.SopsEncrypt()
+            -- unsaved changes, or a stale timestamp would just reload silently
+            vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, { "foo: unsaved" })
+
+            vim.cmd.checktime()
+            vim.api.nvim_del_autocmd(id)
+
+            assert.is_false(changed)
+        end)
     end)
 end)
